@@ -1,0 +1,8 @@
+pandas
+contourpy==1.0.1
+matplotlib==3.8
+gdspy
+spektral
+xgboost
+lazypredict
+
