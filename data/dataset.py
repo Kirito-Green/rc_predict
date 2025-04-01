@@ -8,7 +8,7 @@ import multiprocessing
 
 sys.path.append(os.path.join(os.getcwd(), '..'))
 
-from data.layout import convert_data
+from data.layout import convert_data, convert_data_parallel
 from config import *
 
 
@@ -75,12 +75,26 @@ class MyDataset(Dataset):
 		         x=x, data=data, col_index=col_index, row_index=row_index, y=y)
 
 	def download(self):
+		if len(self.pattern_nums) == 0:
+			print('No pattern numbers provided')
+			return
+		elif len(self.pattern_nums) == 1 and self.pattern_nums[0] == -1: # list all pattern numbers
+			self.pattern_nums = []
+			dir_path = os.path.join(self.dir_prj, "data/raw_data")
+			files = os.listdir(dir_path)
+			for file in files:
+				if file.startswith('pattern'):
+					pattern_num = file.split('pattern')[1]
+					self.pattern_nums.append(pattern_num)
+			print('pattern numbers:', self.pattern_nums)
+
 		for pattern_num in self.pattern_nums:
 			self.pattern_num = pattern_num
 			self.dir_read = os.path.join(self.dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
 			self.dir_save = os.path.join(self.dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
 			if not os.path.exists(self.dir_read):
-				convert_data(self.pattern_num)
+				# convert_data(self.pattern_num)
+				convert_data_parallel(self.pattern_num, self.num_process)
 			if not os.path.exists(self.dir_save):
 				os.mkdir(self.dir_save)
 
@@ -140,7 +154,7 @@ class MyDataset(Dataset):
 
 if __name__ == "__main__":
 	dataset_total = MyDataset(dir_prj=dir_prj,
-							  pattern_nums=[4],
+							  pattern_nums=[-1],
 							  x_name='x_total.npy',
 	                          y_name='y_total.npy',
 	                          g_name='total',
