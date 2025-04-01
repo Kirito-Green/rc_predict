@@ -5,7 +5,7 @@ import os
 from functools import cmp_to_key
 from tqdm import trange
 
-from read_gds import extra_data_from_gds
+from read_gds import extract_data_from_gds
 
 
 def cmp(p1, p2): # 先层数再距离再横向距离
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         gds_path = os.path.join(dir_pattern, case_names[i], gds_name)
         if not os.path.exists(gds_path):
             continue
-        labels, polygons = extra_data_from_gds(gds_path)
+        labels, polygons = extract_data_from_gds(gds_path)
         data_polygons = convert_polygons(net_names[i], labels, polygons)
 
         # append data

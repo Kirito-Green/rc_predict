@@ -5,7 +5,7 @@ dir_prj = "D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/"
 
 # params
 seed = 42
-pattern_nums = [5]
+pattern_nums = [4]
 tolerant_ratio = 0.05 # 允许预测精度误差
 tolerant_error = 1e-6 # 判断精度误差的阈值
 num_process = 8 # 进程数

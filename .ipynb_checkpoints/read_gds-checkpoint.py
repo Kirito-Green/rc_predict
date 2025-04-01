@@ -1,7 +1,7 @@
 import gdspy
 
 
-def extra_data_from_gds(gds_path):
+def extract_data_from_gds(gds_path):
     gds_file = gdspy.GdsLibrary(infile=gds_path)
     top_cell = gds_file.top_level()[0]
     labels = top_cell.labels
