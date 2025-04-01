@@ -5,7 +5,7 @@ import os
 from functools import cmp_to_key
 from tqdm import trange
 
-from read_gds import extra_labels_and_polygons
+from read_gds import extra_data_from_gds
 
 
 def cmp(p1, p2): # 先层数再距离再横向距离
@@ -56,14 +56,14 @@ if __name__ == "__main__":
     pattern_num = 4
     # ubuntu
     # path_csv = ("/media/kael/台电/learn_more_from_life/computer/EDA"
-    #             "/work/prj/rc_predict/raw_data/pattern{}/analysis_results"
+    #             "/work/prj/rc_predict/raw_data/pattern{}/error_analysiss"
     #             "/result_all.csv".format(pattern_num))
     # dir_pattern = ("/media/kael/台电/learn_more_from_life/computer"
     #                "/EDA/work/prj/rc_predict/raw_data/pattern{}"
     #                "/pattern_results".format(pattern_num))
     # windows
     dir_prj = "D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/"
-    path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results/result_all.csv".format(pattern_num))
+    path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/error_analysiss/result_all.csv".format(pattern_num))
     dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results".format(pattern_num))
     dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
 
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         gds_path = os.path.join(dir_pattern, case_names[i], gds_name)
         if not os.path.exists(gds_path):
             continue
-        labels, polygons = extra_labels_and_polygons(gds_path)
+        labels, polygons = extra_data_from_gds(gds_path)
         data_polygons = convert_polygons(net_names[i], labels, polygons)
 
         # append data

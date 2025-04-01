@@ -2,7 +2,12 @@ from spektral.layers import GraphSageConv, GlobalAvgPool, GlobalMaxPool, GlobalS
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dropout, Dense, Flatten
+import sys
+import os
 
+sys.path.append(os.path.join(os.getcwd(), '../'))
+
+from config import *
 
 class GraphSage(Model):
 	'''
@@ -22,7 +27,7 @@ class GraphSage(Model):
 
 	def add_self_loop(self, a):
 		diag_values = tf.linalg.diag_part(a)
-		mask_zero = diag_values == 0
+		mask_zero = abs(diag_values) < tolerant_error
 		diag_values = tf.where(mask_zero, 1.0, 0.0)
 		diag_matrix = tf.linalg.diag(diag_values)
 		a_hat = a + diag_matrix
@@ -35,12 +40,17 @@ class GraphSage(Model):
 		a = tf.cast(a, tf.float32)
 		a = self.add_self_loop(a)
 		# GraphSage 1
+		a = tf.sparse.from_dense(a)
 		x = self.conv1([x, a])
+		a = tf.sparse.to_dense(a)
 		x, a = self.pool1([x, a])
 		# GraphSage 2
+		a = tf.sparse.from_dense(a)
 		x = self.conv2([x, a])
+		a = tf.sparse.to_dense(a)
 		x, a = self.pool2([x, a])
 		# GraphSage 3
+		a = tf.sparse.from_dense(a)
 		x = self.conv3([x, a])
 		x = self.pool3(x)
 		# FC

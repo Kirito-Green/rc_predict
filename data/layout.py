@@ -4,13 +4,12 @@ import os
 import sys
 from functools import cmp_to_key
 from tqdm import trange
-import time
 from tqdm import tqdm
 import multiprocessing
 
 sys.path.append(os.path.join(os.getcwd(), '..'))
 
-from utils.read_gds import extra_labels_and_polygons
+from utils.read_gds import extra_data_from_gds
 from config import *
 
 
@@ -131,7 +130,7 @@ def convert_polygons_couple(net_name, labels, polygons, paths):
 
 
 def convert_data(pattern_num):
-	path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results/result_all.csv".format(pattern_num))
+	path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysiss_results/result_all.csv".format(pattern_num))
 	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results".format(pattern_num))
 	dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
 
@@ -150,7 +149,7 @@ def convert_data(pattern_num):
 		gds_path = os.path.join(dir_pattern, case_names[i], gds_name)
 		if not os.path.exists(gds_path):
 			continue
-		labels, polygons, paths = extra_labels_and_polygons(gds_path)
+		labels, polygons, paths = extra_data_from_gds(gds_path)
 		data_polygons_total = convert_polygons_total(net_names[i], labels, polygons, paths)
 		data_polygons_couple = convert_polygons_couple(net_names[i], labels, polygons, paths)
 
@@ -180,8 +179,8 @@ def call_convert_data(args):
 	gds_name = case_name + ".gds"
 	gds_path = os.path.join(dir_pattern, case_name, gds_name)
 	if not os.path.exists(gds_path):
-		return 0
-	labels, polygons = extra_labels_and_polygons(gds_path)
+		return
+	labels, polygons = extra_data_from_gds(gds_path)
 	data_polygons_total = convert_polygons_total(net_name, labels, polygons)
 	data_polygons_couple = convert_polygons_couple(net_name, labels, polygons)
 
@@ -192,11 +191,9 @@ def call_convert_data(args):
 		y_total=total_cap_3d,
 		y_couple=couple_cap_3d)
 
-	return 1
-
 def convert_data_parallel(pattern_num, num_process=8):
 	print('converting data from pattern{}'.format(pattern_num))
-	path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results/result_all.csv".format(pattern_num))
+	path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/error_analysiss/result_all.csv".format(pattern_num))
 	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results".format(pattern_num))
 	dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
 	if not os.path.exists(dir_save):
@@ -220,7 +217,9 @@ def convert_data_parallel(pattern_num, num_process=8):
 	for i in range(len(net_names)):
 		args.append((i, case_names[i], net_names[i], dir_pattern, dir_save, total_cap_3d[i], couple_cap_3d[i]))
 	pool = multiprocessing.Pool(processes=num_process)
-	# pool.map_async(call_convert_data, args, callback=update)
+	# map the function to the arguments
+	# pool.map(self.cal_graph, args)
+	
 	for arg in args:
 		pool.apply_async(call_convert_data, (arg, ), callback=update)
 	pool.close()

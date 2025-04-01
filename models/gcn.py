@@ -2,7 +2,12 @@ from spektral.layers import GCNConv, GlobalAvgPool, GlobalMaxPool, GlobalSumPool
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dropout, Dense, Flatten
+import sys
+import os
 
+sys.path.append(os.path.join(os.getcwd(), '../'))
+
+from config import *
 
 class GCN(Model):
 	'''
@@ -10,7 +15,7 @@ class GCN(Model):
 	'''
 
 	def __init__(self):
-		super(GCN, self).__init__()
+		super().__init__()
 		self.conv1 = GCNConv(16, activation='relu') # [batch, n, 16]
 		self.pool1 = DiffPool(k=256, activation='relu') #[batch 256, 16]
 		self.conv2 = GCNConv(16, activation='relu') # [batch 256, 16]
@@ -22,7 +27,7 @@ class GCN(Model):
 
 	def add_self_loop(self, a):
 		diag_values = tf.linalg.diag_part(a)
-		mask_zero = diag_values == 0
+		mask_zero = abs(diag_values) < tolerant_error
 		diag_values = tf.where(mask_zero, 1.0, 0.0)
 		diag_matrix = tf.linalg.diag(diag_values)
 		a_hat = a + diag_matrix
@@ -67,3 +72,4 @@ if __name__ == "__main__":
 	# model build
 	model_total = GCN()
 	model_couple = GCN()
+	print('model build done')

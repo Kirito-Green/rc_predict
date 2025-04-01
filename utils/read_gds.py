@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 
-def extra_labels_and_polygons(gds_path):
+def extra_data_from_gds(gds_path):
 	gds_file = gdspy.GdsLibrary(infile=gds_path)
 	top_cell = gds_file.top_level()[0]
 	labels = top_cell.labels
@@ -24,7 +24,7 @@ if __name__ == "__main__":
 		if file.startswith("pattern") or file.startswith('Pattern'):
 			dir_gds = os.path.join(dir_path, file)
 			gds_path = os.path.join(dir_gds, f'{file}.gds')
-			labels, polygons = extra_labels_and_polygons(gds_path)
+			labels, polygons = extra_data_from_gds(gds_path)
 			num = len(polygons)
 			nums.append(num)
 			names.append(file)

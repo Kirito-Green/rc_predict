@@ -1,0 +1,15 @@
+numpy
+pandas
+contourpy==1.0.1
+matplotlib==3.8
+gdspy
+joblib
+lxml
+networkx
+requests
+scikit-learn
+scipy
+tensorflow>=2.2.0
+tqdm
+xgboost
+lazypredict

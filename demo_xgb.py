@@ -166,74 +166,16 @@ yc_test = y_couple_test[:, 1].reshape(-1, 1)
 # #### 模型评估
 
 # %%
-from sklearn.metrics import mean_squared_error, r2_score, mean_squared_error
+from utils.analysis import model_analysis
 
-
-def model_analysis(model, x_train, y_train, x_valid, y_valid, x_test, y_test, name):
-    model.fit(x_train, y_train.ravel())
-    y_train_predict = model.predict(x_train).reshape(-1, 1)
-    y_valid_predict = model.predict(x_valid).reshape(-1, 1)
-    y_test_predict = model.predict(x_test).reshape(-1, 1)
-    mse_train = mean_squared_error(y_train, model.predict(x_train))
-    mse_valid = mean_squared_error(y_valid, y_valid_predict)
-    mse_test = mean_squared_error(y_test, y_test_predict)
-    r2_train = r2_score(y_train, model.predict(x_train))
-    r2_valid = r2_score(y_valid, y_valid_predict)
-    r2_test = r2_score(y_test, y_test_predict)
-    print(f"{name} train mse:", mse_train)
-    print(f"{name} train r2:", r2_train)
-    print(f"{name} valid mse:", mse_valid)
-    print(f"{name} valid r2:", r2_valid)
-    print(f"{name} test mse:", mse_test)
-    print(f"{name} test r2:", r2_test)
-    print('')
-    print('')
-	
-    dict_train = analysis_result(y_train, y_train_predict, title=f'{name} train analysis')
-    dict_valid = analysis_result(y_valid, y_valid_predict, title=f'{name} valid analysis')
-    dict_test = analysis_result(y_test, y_test_predict, title=f'{name} test analysis')
-	
-    return {
-		'model': name,
-		'train mse': mse_train,
-		'train r2': r2_train,
-		'train ratio': dict_train['good ratio'],
-		'valid mse': mse_valid,
-		'valid r2': r2_valid,
-		'valid ratio': dict_valid['good ratio'],
-		'test mse': mse_test,
-		'test r2': r2_test,
-		'test ratio': dict_test['good ratio'],
-    }
-
-def analysis_result(y, y_predict, title):
-    relative_error = np.abs(y - y_predict) / y
-    max_error = np.max(relative_error)
-    mean_error = np.mean(relative_error)
-    std_error = np.std(relative_error)
-    num_good = np.sum(relative_error <= 0.05) / len(y)
-    num_bad = np.sum(relative_error > 0.05) / len(y)
-    print(title)
-    print('max error:', max_error)
-    print('mean error:', mean_error)
-    print('std error:', std_error)
-    print('good ratio:', num_good)
-    print('bad ratio:', num_bad)
-    print('')
-	
-    return {
-        'max error': max_error,
-        'mean error': mean_error,
-        'std error': std_error,
-        'good ratio': num_good,
-        'bad ratio': num_bad,
-    }
 
 # %%
 import xgboost as xgb
+import pandas as pd
 
 
 # total
+print('--------------------------------total------------------------------')
 # XGBoost extreme gradient boosting
 xgb_t = xgb.XGBRegressor(booster='gbtree',
                          n_estimators=100,
@@ -241,9 +183,11 @@ xgb_t = xgb.XGBRegressor(booster='gbtree',
                          max_depth=6,
                          min_child_weight=3,
                          seed=42)
-model_analysis(xgb_t, xt_train, yt_train, xt_valid, yt_valid, xt_test, yt_test, 'XGBoost total')
+dict_total = model_analysis(xgb_t, xt_train, yt_train, xt_valid, yt_valid, xt_test, yt_test, 'XGBoost')
+results_total = pd.Series(dict_total).to_frame().T
 
 # couple
+print('--------------------------------couple------------------------------')
 # XGBoost extreme gradient boosting
 xgb_c = xgb.XGBRegressor(booster='gbtree',
                          n_estimators=100,
@@ -251,4 +195,13 @@ xgb_c = xgb.XGBRegressor(booster='gbtree',
                          max_depth=6,
                          min_child_weight=3,
                          seed=42)
-model_analysis(xgb_c, xc_train, yc_train, xc_valid, yc_valid, xc_test, yc_test, 'XGBoost couple')
+dict_couple = model_analysis(xgb_c, xc_train, yc_train, xc_valid, yc_valid, xc_test, yc_test, 'XGBoost')
+results_couple = pd.Series(dict_couple).to_frame().T
+
+# %% save results
+dir_results = os.path.join(dir_prj, "results")
+if not os.path.exists(dir_results):
+	os.mkdir(dir_results)
+
+results_total.to_csv(os.path.join(dir_results, "xgb_total.csv"), index=False)
+results_couple.to_csv(os.path.join(dir_results, "xgb_couple.csv"), index=False)

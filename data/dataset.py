@@ -5,7 +5,6 @@ import scipy.sparse as sp
 from spektral.data import Dataset, Graph
 from tqdm import tqdm, trange
 import multiprocessing
-import time
 
 sys.path.append(os.path.join(os.getcwd(), '..'))
 
@@ -18,15 +17,24 @@ class MyDataset(Dataset):
 	a dataset of pattern results
 	'''
 
-	def __init__(self, pattern_nums, x_name, y_name, g_name, num_process=8, update=False, **kwargs):
+	def __init__(self, 
+			     dir_prj,
+				 pattern_nums, 
+			  	 x_name, 
+				 y_name, 
+				 g_name, 
+				 num_process=8, 
+				 update=False, 
+				 **kwargs):
+		self.dir_prj = dir_prj
+		self.pattern_nums = pattern_nums
 		self.x_name = x_name
 		self.y_name = y_name
 		self.g_name = g_name
 		self.num_process = num_process
 		self.update = update
-		self.pattern_nums = pattern_nums
 		self.vertical_space = 0.024  # um
-		self.neighbor_dist_max = 10  # um
+		self.neighbor_dist_max = 5  # um
 		super().__init__(**kwargs)
 
 	def cal_graph(self, args):
@@ -65,14 +73,12 @@ class MyDataset(Dataset):
 
 		np.savez(os.path.join(self.dir_save, f'{self.g_name}_{id}.npz'),
 		         x=x, data=data, col_index=col_index, row_index=row_index, y=y)
-		print(f'graph_{self.g_name}_{id} saved')
 
 	def download(self):
 		for pattern_num in self.pattern_nums:
-			print('downloading pattern{}'.format(pattern_num))
 			self.pattern_num = pattern_num
-			self.dir_read = os.path.join(dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
-			self.dir_save = os.path.join(dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
+			self.dir_read = os.path.join(self.dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
+			self.dir_save = os.path.join(self.dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
 			if not os.path.exists(self.dir_read):
 				convert_data(self.pattern_num)
 			if not os.path.exists(self.dir_save):
@@ -80,18 +86,20 @@ class MyDataset(Dataset):
 
 			if not os.path.exists(os.path.join(self.dir_save, f'{self.g_name}_0.npz'))\
 				or self.update == True:
-				# work bar
-				pbar = tqdm(total=len(x), desc=f'Downloading data from pattern{self.pattern_num}', unit='file')
-				update = lambda *args: pbar.update()
-
 				x = np.load(os.path.join(self.dir_read, self.x_name), allow_pickle=True)
 				y = np.load(os.path.join(self.dir_read, self.y_name))
 				ids = np.arange(len(x))
-				args = []
-				for i in range(len(x)):
-					args.append((x[i], y[i], ids[i]))
+				args = [(x[i], y[i], ids[i]) for i in range(len(x))]
+
+				# work bar
+				pbar = tqdm(total=len(args), desc=f'Downloading data from pattern{self.pattern_num}', unit='file')
+				update = lambda *args: pbar.update()
+
 				pool = multiprocessing.Pool(processes=self.num_process)
-					# pool.map(self.cal_graph, args, callback=update)
+				# map the function to the arguments
+				# pool.map(self.cal_graph, args)
+
+				# async update
 				for arg in args:
 					pool.apply_async(self.cal_graph, (arg,), callback=update)
 				pool.close()
@@ -131,13 +139,19 @@ class MyDataset(Dataset):
 
 
 if __name__ == "__main__":
-	dataset_total = MyDataset(pattern_nums=[4],
+	dataset_total = MyDataset(dir_prj=dir_prj,
+							  pattern_nums=[4],
 							  x_name='x_total.npy',
 	                          y_name='y_total.npy',
 	                          g_name='total',
+							  num_process=8,
 	                          update=False)
-	dataset_couple = MyDataset(pattern_nums=[4],
+	dataset_couple = MyDataset(dir_prj=dir_prj,
+							   pattern_nums=[4],
 							   x_name='x_couple.npy',
 	                           y_name='y_couple.npy',
 	                           g_name='couple',
+							   num_process=8,
 	                           update=False)
+	print(dataset_total)
+	print(dataset_couple)
