@@ -6,10 +6,11 @@ from functools import cmp_to_key
 from tqdm import trange
 from tqdm import tqdm
 import multiprocessing
+import gdspy
 
 sys.path.append(os.path.join(os.getcwd(), '..'))
 
-from utils.read_gds import extra_data_from_gds
+from utils.gds import extract_data_from_gds, paths2polygons
 from config import *
 
 
@@ -38,7 +39,7 @@ def cmp(p1, p2): # 先主导提即x=0 y=0 z=0再耦合导体即x<0再层数layer
 
 
 def get_polygon_data(polygon):
-	endpoint_pos = np.mean(np.array(polygon.polygons), axis=0)
+	endpoint_pos = np.array(polygon.polygons)[0]
 	x, y = np.mean(endpoint_pos, axis=0)
 	max_pos = np.max(endpoint_pos, axis=0)
 	min_pos = np.min(endpoint_pos, axis=0)
@@ -68,6 +69,11 @@ def convert_polygons_total(net_name, labels, polygons, paths):
 
 	data_polygons = []
 	main_polygon = np.zeros(5)
+	
+	# get polygons from paths
+	path_polygons = paths2polygons(paths)
+	# append polygons
+	polygons.extend(path_polygons)
 	for polygon in polygons:
 		data_polygon = get_polygon_data(polygon)
 		data_polygons.append(data_polygon)
@@ -94,9 +100,15 @@ def convert_polygons_couple(net_name, labels, polygons, paths):
 		if label.text.lower() == net_name.lower():
 			main_label = label
 			break
+
 	data_polygons = []
 	main_polygon = np.zeros(5)
 	env_polygons_id = []
+
+	# get polygons from paths
+	path_polygons = paths2polygons(paths)
+	# append polygons
+	polygons.extend(path_polygons)
 	for i, polygon in enumerate(polygons):
 		data_polygon = get_polygon_data(polygon)
 		data_polygons.append(data_polygon)
@@ -130,35 +142,60 @@ def convert_polygons_couple(net_name, labels, polygons, paths):
 
 
 def convert_data(pattern_num):
-	path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysiss_results/result_all.csv".format(pattern_num))
-	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results".format(pattern_num))
-	dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
-
-	data_file = pd.read_csv(path_csv)
-	net_names = data_file['net_name']
-	case_names = data_file['case_name']
-	total_cap_3d = data_file['total_cap_3d']
-	couple_cap_3d = data_file['couple_cap_3d']
 	data_polygons_total_all = []
 	data_polygons_couple_all = []
 	data_total_cap_3d = []
-	data_couple_cap_3d = []
+	data_couple_cap_3d =  []
 
-	for i in trange(len(net_names)):
-		gds_name = case_names[i] + ".gds"
-		gds_path = os.path.join(dir_pattern, case_names[i], gds_name)
-		if not os.path.exists(gds_path):
-			continue
-		labels, polygons, paths = extra_data_from_gds(gds_path)
-		data_polygons_total = convert_polygons_total(net_names[i], labels, polygons, paths)
-		data_polygons_couple = convert_polygons_couple(net_names[i], labels, polygons, paths)
+	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}".format(pattern_num))
+	if not os.path.exists(dir_pattern):
+		print('pattern{} data not exist'.format(pattern_num))
+		return
+	
+	id = 1
+	while True:
+		if os.path.exists(os.path.join(dir_pattern, "analysis_results")):
+			path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results/result_all.csv".format(pattern_num))
+			dir_gds = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results".format(pattern_num))
+			dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
+			data_file = pd.read_csv(path_csv)
+			id = -1
+		else:
+			path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results_{}/result_all.csv".format(pattern_num, id))
+			dir_gds = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results_{}".format(pattern_num, id))
+			dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
+			if not os.path.exists(dir_gds):
+				break
+			data_file = pd.read_csv(path_csv)
 
-		# append data
-		data_polygons_total_all.append(data_polygons_total) # x
-		data_polygons_couple_all.append(data_polygons_couple)
-		data_total_cap_3d.append(total_cap_3d[i]) # target
-		data_couple_cap_3d.append(couple_cap_3d[i])
+		net_names = data_file['net_name']
+		case_names = data_file['case_name']
+		total_cap_3d = data_file['total_cap_3d']
+		couple_cap_3d = data_file['couple_cap_3d']
 
+		for i in trange(len(net_names)):
+			gds_name = case_names[i] + ".gds"
+			gds_path = os.path.join(dir_gds, case_names[i], gds_name)
+			if not os.path.exists(gds_path):
+				print('gds path not exist: {}'.format(gds_path))
+				continue
+			labels, polygons, paths = extract_data_from_gds(gds_path)
+			data_polygons_total = convert_polygons_total(net_names[i], labels, polygons, paths)
+			data_polygons_couple = convert_polygons_couple(net_names[i], labels, polygons, paths)
+
+			# append data
+			data_polygons_total_all.append(data_polygons_total) # x
+			data_polygons_couple_all.append(data_polygons_couple)
+			data_total_cap_3d.append(total_cap_3d[i]) # target
+			data_couple_cap_3d.append(couple_cap_3d[i])
+
+		# loop control
+		if id == -1:
+			break
+		else:
+			id += 1
+
+	# convert to numpy array
 	data_polygons_total_all = np.array(data_polygons_total_all, dtype=object)
 	data_polygons_couple_all = np.array(data_polygons_couple_all, dtype=object)
 	data_total_cap_3d = np.array(data_total_cap_3d, dtype=np.float32)
@@ -175,14 +212,15 @@ def convert_data(pattern_num):
 
 
 def call_convert_data(args):
-	id, case_name, net_name, dir_pattern, dir_save, total_cap_3d, couple_cap_3d = args
+	id, case_name, net_name, dir_gds, dir_save, total_cap_3d, couple_cap_3d = args
 	gds_name = case_name + ".gds"
-	gds_path = os.path.join(dir_pattern, case_name, gds_name)
+	gds_path = os.path.join(dir_gds, case_name, gds_name)
 	if not os.path.exists(gds_path):
+		print('gds path not exist: {}'.format(gds_path))
 		return
-	labels, polygons = extra_data_from_gds(gds_path)
-	data_polygons_total = convert_polygons_total(net_name, labels, polygons)
-	data_polygons_couple = convert_polygons_couple(net_name, labels, polygons)
+	labels, polygons, paths = extract_data_from_gds(gds_path)
+	data_polygons_total = convert_polygons_total(net_name, labels, polygons, paths)
+	data_polygons_couple = convert_polygons_couple(net_name, labels, polygons, paths)
 
 	# save data
 	np.savez(os.path.join(dir_save, f'convert_{id}.npz'),
@@ -193,48 +231,78 @@ def call_convert_data(args):
 
 def convert_data_parallel(pattern_num, num_process=8):
 	print('converting data from pattern{}'.format(pattern_num))
-	path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/error_analysiss/result_all.csv".format(pattern_num))
-	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results".format(pattern_num))
-	dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
-	if not os.path.exists(dir_save):
-		os.mkdir(dir_save)
-
-	data_file = pd.read_csv(path_csv)
-	net_names = data_file['net_name']
-	case_names = data_file['case_name']
-	total_cap_3d = data_file['total_cap_3d']
-	couple_cap_3d = data_file['couple_cap_3d']
 	data_polygons_total_all = []
 	data_polygons_couple_all = []
 	data_total_cap_3d = []
 	data_couple_cap_3d = []
 
-	# work bar
-	pbar = tqdm(total=len(net_names), desc="Converting data", unit="file")
-	update = lambda *args: pbar.update()
-
-	args = []
-	for i in range(len(net_names)):
-		args.append((i, case_names[i], net_names[i], dir_pattern, dir_save, total_cap_3d[i], couple_cap_3d[i]))
-	pool = multiprocessing.Pool(processes=num_process)
-	# map the function to the arguments
-	# pool.map(self.cal_graph, args)
+	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}".format(pattern_num))
+	if not os.path.exists(dir_pattern):
+		print('pattern{} data not exist'.format(pattern_num))
+		return
 	
-	for arg in args:
-		pool.apply_async(call_convert_data, (arg, ), callback=update)
-	pool.close()
-	pool.join()
+	id = 1
+	while True:
+		if os.path.exists(os.path.join(dir_pattern, "analysis_results")):
+			path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results/result_all.csv".format(pattern_num))
+			dir_gds = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results".format(pattern_num))
+			dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
+			data_file = pd.read_csv(path_csv)
+			id = -1
+		else:
+			path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results_{}/result_all.csv".format(pattern_num, id))
+			dir_gds = os.path.join(dir_prj, "data/raw_data/pattern{}/pattern_results_{}".format(pattern_num, id))
+			dir_save = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
+			if not os.path.exists(dir_gds):
+				break
+			data_file = pd.read_csv(path_csv)
 
-	# gather data
-	for i in range(len(net_names)):
-		load_path = os.path.join(dir_save, f'convert_{i}.npz')
-		if not os.path.exists(load_path):
-			continue
-		with np.load(load_path, allow_pickle=True) as data:
-			data_polygons_total_all.append(data['x_total'])
-			data_polygons_couple_all.append(data['x_couple'])
-			data_total_cap_3d.append(data['y_total'])
-			data_couple_cap_3d.append(data['y_couple'])
+		net_names = data_file['net_name']
+		case_names = data_file['case_name']
+		total_cap_3d = data_file['total_cap_3d']
+		couple_cap_3d = data_file['couple_cap_3d']
+
+		# work bar
+		pbar = tqdm(total=len(net_names), desc=f"Converting data from pattern{pattern_num}_{id}", unit="file")
+		update = lambda *args: pbar.update()
+
+		args = []
+		for i in range(len(net_names)):
+			args.append((i, case_names[i], net_names[i], dir_gds, dir_save, total_cap_3d[i], couple_cap_3d[i]))
+		pool = multiprocessing.Pool(processes=num_process)
+		# map the function to the arguments
+		# pool.map(call_convert_data, args)
+		
+		for arg in args:
+			pool.apply_async(call_convert_data, (arg, ), callback=update)
+		pool.close()
+		pool.join()
+
+		# gather data
+		for i in range(len(net_names)):
+			load_path = os.path.join(dir_save, f'convert_{i}.npz')
+			if not os.path.exists(load_path):
+				continue
+			with np.load(load_path, allow_pickle=True) as data:
+				data_polygons_total_all.append(data['x_total'])
+				data_polygons_couple_all.append(data['x_couple'])
+				data_total_cap_3d.append(data['y_total'])
+				data_couple_cap_3d.append(data['y_couple'])
+
+		# delete data
+		for i in range(len(net_names)):
+			try:
+				delete_path = os.path.join(dir_save, f'convert_{i}.npz')
+				if os.path.exists(delete_path):
+					os.remove(delete_path)
+			except Exception as e:
+				print(f'Error: {e}')
+
+		# loop control
+		if id == -1:
+			break
+		else:
+			id += 1
 
 	# convert to numpy array
 	data_polygons_total_all = np.array(data_polygons_total_all, dtype=object)
@@ -243,20 +311,13 @@ def convert_data_parallel(pattern_num, num_process=8):
 	data_couple_cap_3d = np.array(data_couple_cap_3d, dtype=np.float32)
 
 	# save data
+	if not os.path.exists(dir_save):
+		os.mkdir(dir_save)
 	np.save(os.path.join(dir_save, "x_total.npy"), data_polygons_total_all)
 	np.save(os.path.join(dir_save, "x_couple.npy"), data_polygons_couple_all)
 	np.save(os.path.join(dir_save, "y_total.npy"), data_total_cap_3d)
 	np.save(os.path.join(dir_save, "y_couple.npy"), data_couple_cap_3d)
 	print(f'convert data from pattern{pattern_num} done!')
-
-	# delete data
-	for i in range(len(net_names)):
-		try:
-			delete_path = os.path.join(dir_save, f'convert_{i}.npz')
-			if os.path.exists(delete_path):
-				os.remove(delete_path)
-		except Exception as e:
-			print(f'Error: {e}')
 
 
 if __name__ == "__main__":
