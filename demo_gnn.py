@@ -295,9 +295,9 @@ for epoch in range(epochs):
 	val_loss_all.append(history.history['val_loss'][0])
 
 	# save model every model_save_freq epochs
-	# if (epoch + 1) % model_save_freq == 0:
-	# 	model_total_save_path = os.path.join(dir_parmas, f'{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epoch}.h5')
-	# 	model_total.save_weights(model_total_save_path)
+	if (epoch + 1) % model_save_freq == 0:
+		model_total_save_path = os.path.join(dir_parmas, f'{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epoch}.h5')
+		model_total.save_weights(model_total_save_path)
 
 	# save best model on validation set
 	val_loss, val_score = model_total.evaluate(loader_valid.load(), steps=loader_valid.steps_per_epoch)
@@ -377,9 +377,9 @@ for epoch in range(epochs):
 	val_loss_all.append(history.history['val_loss'][0])
 
 	# save model every model_save_freq epochs
-	# if (epoch + 1) % model_save_freq == 0:
-	# 	model_couple_save_path = os.path.join(dir_parmas, f'{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epoch}.h5')
-	# 	model_couple.save_weights(model_couple_save_path)
+	if (epoch + 1) % model_save_freq == 0:
+		model_couple_save_path = os.path.join(dir_parmas, f'{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epoch}.h5')
+		model_couple.save_weights(model_couple_save_path)
 
 	# save best model on validation set
 	val_loss, val_score = model_couple.evaluate(loader_valid.load(), steps=loader_valid.steps_per_epoch)
