@@ -1,17 +1,14 @@
-import numpy as np
-import pandas as pd
 import os
 import sys
+sys.path.append(os.path.join(os.getcwd(), '..'))
+import numpy as np
+import pandas as pd
 from functools import cmp_to_key
 from tqdm import trange
 from tqdm import tqdm
 import multiprocessing
-import gdspy
-
-sys.path.append(os.path.join(os.getcwd(), '..'))
 
 from utils.gds import extract_data_from_gds, paths2polygons
-from config import *
 
 
 def cmp(p1, p2): # 先主导提即x=0 y=0 z=0再耦合导体即x<0再层数layer=0再layer<0再dist再x（层数值越小越在上层）
@@ -141,7 +138,7 @@ def convert_polygons_couple(net_name, labels, polygons, paths):
 	return data_polygons
 
 
-def convert_data(pattern_num):
+def convert_data(dir_prj, pattern_num):
 	data_polygons_total_all = []
 	data_polygons_couple_all = []
 	data_total_cap_3d = []
@@ -149,7 +146,7 @@ def convert_data(pattern_num):
 
 	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}".format(pattern_num))
 	if not os.path.exists(dir_pattern):
-		print('pattern{} data not exist'.format(pattern_num))
+		print('pattern{} raw data not exist'.format(pattern_num))
 		return
 	
 	id = 1
@@ -229,7 +226,7 @@ def call_convert_data(args):
 		y_total=total_cap_3d,
 		y_couple=couple_cap_3d)
 
-def convert_data_parallel(pattern_num, num_process=8):
+def convert_data_parallel(dir_prj, pattern_num, num_process=8):
 	print('converting data from pattern{}'.format(pattern_num))
 	data_polygons_total_all = []
 	data_polygons_couple_all = []
@@ -238,7 +235,7 @@ def convert_data_parallel(pattern_num, num_process=8):
 
 	dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}".format(pattern_num))
 	if not os.path.exists(dir_pattern):
-		print('pattern{} data not exist'.format(pattern_num))
+		print('pattern{} raw data not exist'.format(pattern_num))
 		return
 	
 	id = 1
@@ -256,6 +253,9 @@ def convert_data_parallel(pattern_num, num_process=8):
 			if not os.path.exists(dir_gds):
 				break
 			data_file = pd.read_csv(path_csv)
+
+		if not os.path.exists(dir_save):
+			os.mkdir(dir_save)
 
 		net_names = data_file['net_name']
 		case_names = data_file['case_name']
@@ -311,8 +311,6 @@ def convert_data_parallel(pattern_num, num_process=8):
 	data_couple_cap_3d = np.array(data_couple_cap_3d, dtype=np.float32)
 
 	# save data
-	if not os.path.exists(dir_save):
-		os.mkdir(dir_save)
 	np.save(os.path.join(dir_save, "x_total.npy"), data_polygons_total_all)
 	np.save(os.path.join(dir_save, "x_couple.npy"), data_polygons_couple_all)
 	np.save(os.path.join(dir_save, "y_total.npy"), data_total_cap_3d)
@@ -321,6 +319,6 @@ def convert_data_parallel(pattern_num, num_process=8):
 
 
 if __name__ == "__main__":
-	pattern_num = 4
-	# convert_data(pattern_num)
-	convert_data_parallel(pattern_num)
+	pattern_num = 27
+	# convert_data('D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/', pattern_num)
+	# convert_data_parallel('D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/', pattern_num

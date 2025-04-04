@@ -6,11 +6,10 @@
 
 # %%
 import os
+import sys
+sys.path.append(os.path.join(os.getcwd(), '..'))
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
-
-sys.path.append(os.path.join(os.getcwd(), '..'))
 
 from config import *
 from data.layout import convert_data_parallel
@@ -50,7 +49,7 @@ for pattern_num in pattern_nums:
 	dir_load = os.path.join(dir_prj, "data/convert_data/pattern{}".format(pattern_num))
 	if not os.path.exists(dir_load):
 		# convert_data(pattern_num)
-		convert_data_parallel(pattern_num, num_process=8)
+		convert_data_parallel(dir_prj, pattern_num, num_process=8)
 
 # data process 2
 x_total_ = np.load(os.path.join(dir_load, "x_total.npy"), allow_pickle=True)

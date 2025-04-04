@@ -1,15 +1,14 @@
 import os
 import sys
+sys.path.append(os.path.join(os.getcwd(), '..'))
+
 import numpy as np
 import scipy.sparse as sp
 from spektral.data import Dataset, Graph
 from tqdm import tqdm, trange
 import multiprocessing
 
-sys.path.append(os.path.join(os.getcwd(), '..'))
-
 from data.layout import convert_data, convert_data_parallel
-from config import *
 
 
 class MyDataset(Dataset):
@@ -92,9 +91,10 @@ class MyDataset(Dataset):
 			self.pattern_num = pattern_num
 			self.dir_read = os.path.join(self.dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
 			self.dir_save = os.path.join(self.dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
-			if not os.path.exists(self.dir_read):
-				# convert_data(self.pattern_num)
-				convert_data_parallel(self.pattern_num, self.num_process)
+			if not os.path.exists(os.path.join(self.dir_read, self.x_name)):
+				print('pattern{} convert data not exist'.format(self.pattern_num))
+				# convert_data(self.dir_prj, self.pattern_num)
+				convert_data_parallel(self.dir_prj, self.pattern_num, self.num_process)
 			if not os.path.exists(self.dir_save):
 				os.mkdir(self.dir_save)
 
@@ -128,12 +128,16 @@ class MyDataset(Dataset):
 		for pattern_num in self.pattern_nums:
 			print('reading pattern{}'.format(pattern_num))
 			self.pattern_num = pattern_num
-			self.dir_read = os.path.join(dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
-			self.dir_save = os.path.join(dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
-			id = 0
-			while True:
-				path_graph = os.path.join(self.dir_save, f'{self.g_name}_{id}.npz')
-				if os.path.exists(path_graph):
+			self.dir_read = os.path.join(self.dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
+			self.dir_save = os.path.join(self.dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
+			
+			graphs = os.listdir(self.dir_save)
+			cnt = 0
+			cnt_max = 1500
+			for graph in graphs:
+				if graph.startswith(f'{self.g_name}'):
+					cnt += 1
+					path_graph = os.path.join(self.dir_save, graph)
 					g = np.load(path_graph, allow_pickle=True)
 					x = g['x']
 					data = g['data']
@@ -143,9 +147,9 @@ class MyDataset(Dataset):
 					a = sp.csr_matrix((data, col_index, row_index), shape=(n, n))
 					y = g['y']
 					output.append(Graph(x=x, a=a, y=y))
-					id = id + 1
-				else:
-					break
+
+					if cnt > cnt_max:
+						break
 			print(f'pattern{self.pattern_num} data readed')
 		print('all data readed')
 
@@ -153,15 +157,15 @@ class MyDataset(Dataset):
 
 
 if __name__ == "__main__":
-	dataset_total = MyDataset(dir_prj=dir_prj,
-							  pattern_nums=[-1],
+	dataset_total = MyDataset(dir_prj='D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/',
+							  pattern_nums=[28],
 							  x_name='x_total.npy',
 	                          y_name='y_total.npy',
 	                          g_name='total',
 							  num_process=8,
 	                          update=False)
-	dataset_couple = MyDataset(dir_prj=dir_prj,
-							   pattern_nums=[4],
+	dataset_couple = MyDataset(dir_prj='D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/',
+							   pattern_nums=[28],
 							   x_name='x_couple.npy',
 	                           y_name='y_couple.npy',
 	                           g_name='couple',

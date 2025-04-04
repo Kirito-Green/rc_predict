@@ -1,9 +1,8 @@
-import gdspy
 import sys
 import os
-import numpy as np
-
 sys.path.append(os.path.join(os.getcwd(), '../'))
+import gdspy
+import numpy as np
 
 from config import *
 
@@ -28,7 +27,7 @@ def paths2polygons(paths):
 		for i in range(1, n):
 			dist = np.array(points[i] - points[i - 1])
 			dist_norm = dist / np.sqrt(np.sum(dist ** 2))
-			stretch_side = np.where(abs(dist) < tolerant_error, widths[i - 1] / 2, 0)
+			stretch_side = np.where(abs(dist) < tolerant_zero_error, widths[i - 1] / 2, 0)
 			stretch_front = widths[i - 1] / 2 * dist_norm
 			if i == 1:
 				pts = [(points[i - 1] + stretch_side), (points[i - 1] - stretch_side),
@@ -46,7 +45,7 @@ def paths2polygons(paths):
 
 
 if __name__ == "__main__":
-	pattern_num = 4
+	pattern_num = 27
 	dir_path = ("D:/learn_more_from_life/computer/EDA/work/prj/rc_predict"
 	             f"/data/raw_data/pattern{pattern_num}/pattern_results/")
 	files = os.listdir(dir_path)
@@ -57,6 +56,8 @@ if __name__ == "__main__":
 			dir_gds = os.path.join(dir_path, file)
 			gds_path = os.path.join(dir_gds, f'{file}.gds')
 			labels, polygons, paths = extract_data_from_gds(gds_path)
+			paths_polygons = paths2polygons(paths)
+			polygons.extend(paths_polygons)
 			num = len(polygons)
 			nums.append(num)
 			names.append(file)

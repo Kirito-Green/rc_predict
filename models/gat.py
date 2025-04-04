@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.join(os.getcwd(), '../'))
 from spektral.layers import GATConv, GlobalAvgPool, GlobalMaxPool, GlobalSumPool, DiffPool
 import tensorflow as tf
 from tensorflow.keras.models import Model

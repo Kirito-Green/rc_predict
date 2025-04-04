@@ -1,11 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.join(os.getcwd(), '../'))
 from spektral.layers import GraphSageConv, GlobalAvgPool, GlobalMaxPool, GlobalSumPool, DiffPool
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dropout, Dense, Flatten
-import sys
-import os
-
-sys.path.append(os.path.join(os.getcwd(), '../'))
 
 from config import *
 
@@ -27,7 +26,7 @@ class GraphSage(Model):
 
 	def add_self_loop(self, a):
 		diag_values = tf.linalg.diag_part(a)
-		mask_zero = abs(diag_values) < tolerant_error
+		mask_zero = abs(diag_values) < tolerant_zero_error
 		diag_values = tf.where(mask_zero, 1.0, 0.0)
 		diag_matrix = tf.linalg.diag(diag_values)
 		a_hat = a + diag_matrix

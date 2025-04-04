@@ -1,5 +1,9 @@
+import os
+import sys
+sys.path.append(os.path.join(os.getcwd(), '../'))
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
+
 from spektral.data import BatchLoader
 from config import *
 
@@ -87,8 +91,8 @@ def error_analysis(y, y_predict, title):
 	max_error = np.max(relative_error)
 	mean_error = np.mean(relative_error)
 	std_error = np.std(relative_error)
-	num_good = np.sum(relative_error <= tolerant_ratio) / len(y)
-	num_bad = np.sum(relative_error > tolerant_ratio) / len(y)
+	num_good = np.sum(relative_error <= tolerant_ratio_error) / len(y)
+	num_bad = np.sum(relative_error > tolerant_ratio_error) / len(y)
 	print(title)
 	print('min error:', min_error)
 	print('max error:', max_error)
@@ -110,4 +114,4 @@ def error_analysis(y, y_predict, title):
 
 def ratio_good(y, y_predict):
 	relative_error = np.abs(y - y_predict) / y
-	return np.sum(relative_error <= tolerant_ratio) / len(y)
+	return np.sum(relative_error <= tolerant_ratio_error) / len(y)
