@@ -5,10 +5,12 @@ sys.path.append(os.path.join(os.getcwd(), '..'))
 import numpy as np
 import scipy.sparse as sp
 from spektral.data import Dataset, Graph
-from tqdm import tqdm, trange
+from tqdm import tqdm
 import multiprocessing
 
-from data.layout import convert_data, convert_data_parallel
+from data.layout import convert_data_parallel
+from data.preprocess import data_process
+from config import cnt_max, window_size
 
 
 class MyDataset(Dataset):
@@ -18,6 +20,7 @@ class MyDataset(Dataset):
 
 	def __init__(self, 
 			     dir_prj,
+				 ndm,
 				 pattern_nums, 
 			  	 x_name, 
 				 y_name, 
@@ -26,21 +29,21 @@ class MyDataset(Dataset):
 				 update=False, 
 				 **kwargs):
 		self.dir_prj = dir_prj
+		self.ndm = ndm
 		self.pattern_nums = pattern_nums
 		self.x_name = x_name
 		self.y_name = y_name
 		self.g_name = g_name
 		self.num_process = num_process
 		self.update = update
-		self.vertical_space = 0.024  # um
-		self.neighbor_dist_max = 5  # um
 		super().__init__(**kwargs)
 
 	def cal_graph(self, args):
 		x_, y, id = args
 		n = len(x_)
 		x = np.array(x_, dtype=np.float32)
-		x[:, 2] = self.vertical_space * x[:, 2]
+		# preprocess data
+		x = data_process(x, y)
 
 		# 直接求解稀疏矩阵
 		row_index = []
@@ -63,7 +66,7 @@ class MyDataset(Dataset):
 				else:
 					p1 = np.array([x[j][0], x[j][1], x[j][2]])  # x y z
 					p2 = np.array([x[k][0], x[k][1], x[k][2]])
-					if np.linalg.norm(p1 - p2) <= self.neighbor_dist_max:
+					if np.linalg.norm(p1 - p2) <= self.ndm / window_size:
 						a_[j][k] = 1
 						row_index[-1] = row_index[-1] + 1
 						col_index.append(k)
@@ -90,11 +93,16 @@ class MyDataset(Dataset):
 		for pattern_num in self.pattern_nums:
 			self.pattern_num = pattern_num
 			self.dir_read = os.path.join(self.dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
-			self.dir_save = os.path.join(self.dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
+			self.dir_graph = os.path.join(self.dir_prj, "data/graph_data_ndm{}/".format(self.ndm))
+			self.dir_save = os.path.join(self.dir_graph, "pattern{}".format(self.pattern_num))
 			if not os.path.exists(os.path.join(self.dir_read, self.x_name)):
 				print('pattern{} convert data not exist'.format(self.pattern_num))
 				# convert_data(self.dir_prj, self.pattern_num)
 				convert_data_parallel(self.dir_prj, self.pattern_num, self.num_process)
+				
+			if not os.path.exists(self.dir_graph):
+				os.mkdir(self.dir_graph)
+
 			if not os.path.exists(self.dir_save):
 				os.mkdir(self.dir_save)
 
@@ -129,11 +137,10 @@ class MyDataset(Dataset):
 			print('reading pattern{}'.format(pattern_num))
 			self.pattern_num = pattern_num
 			self.dir_read = os.path.join(self.dir_prj, "data/convert_data/pattern{}".format(self.pattern_num))
-			self.dir_save = os.path.join(self.dir_prj, "data/graph_data/pattern{}".format(self.pattern_num))
+			self.dir_save = os.path.join(self.dir_prj, "data/graph_data_ndm{}/pattern{}".format(self.ndm, self.pattern_num))
 			
 			graphs = os.listdir(self.dir_save)
 			cnt = 0
-			cnt_max = 1500
 			for graph in graphs:
 				if graph.startswith(f'{self.g_name}'):
 					cnt += 1
@@ -158,14 +165,16 @@ class MyDataset(Dataset):
 
 if __name__ == "__main__":
 	dataset_total = MyDataset(dir_prj='D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/',
-							  pattern_nums=[28],
+						   	  ndm=25,
+							  pattern_nums=[4],
 							  x_name='x_total.npy',
 	                          y_name='y_total.npy',
 	                          g_name='total',
 							  num_process=8,
 	                          update=False)
 	dataset_couple = MyDataset(dir_prj='D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/',
-							   pattern_nums=[28],
+							   ndm=25,
+							   pattern_nums=[4],
 							   x_name='x_couple.npy',
 	                           y_name='y_couple.npy',
 	                           g_name='couple',

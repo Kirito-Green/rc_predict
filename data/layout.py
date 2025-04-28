@@ -9,6 +9,7 @@ from tqdm import tqdm
 import multiprocessing
 
 from utils.gds import extract_data_from_gds, paths2polygons
+from config import *
 
 
 def cmp(p1, p2): # 先主导提即x=0 y=0 z=0再耦合导体即x<0再层数layer=0再layer<0再dist再x（层数值越小越在上层）
@@ -65,7 +66,6 @@ def convert_polygons_total(net_name, labels, polygons, paths):
 			break
 
 	data_polygons = []
-	main_polygon = np.zeros(5)
 	
 	# get polygons from paths
 	path_polygons = paths2polygons(paths)
@@ -73,20 +73,15 @@ def convert_polygons_total(net_name, labels, polygons, paths):
 	polygons.extend(path_polygons)
 	for polygon in polygons:
 		data_polygon = get_polygon_data(polygon)
-		data_polygons.append(data_polygon)
 
-		# get main polygon
+		# get main polygon 
+		# 0 main polygon 1 environment polygon
 		if is_in_polygon(main_label, polygon):
-			main_polygon = data_polygon.copy()
+			data_polygon = np.append(data_polygon, 0) # main polygon
+		else:
+			data_polygon = np.append(data_polygon, 1) # environment polygon
 
-	# feature engineering
-	for i in range(len(data_polygons)):
-		data_polygons[i][0] -= main_polygon[0]
-		data_polygons[i][1] -= main_polygon[1]
-		data_polygons[i][2] -= main_polygon[2]
-
-	# sort
-	data_polygons.sort(key=cmp_to_key(cmp))
+		data_polygons.append(data_polygon)
 
 	return data_polygons
 
@@ -99,41 +94,32 @@ def convert_polygons_couple(net_name, labels, polygons, paths):
 			break
 
 	data_polygons = []
-	main_polygon = np.zeros(5)
-	env_polygons_id = []
 
 	# get polygons from paths
 	path_polygons = paths2polygons(paths)
 	# append polygons
 	polygons.extend(path_polygons)
-	for i, polygon in enumerate(polygons):
+	for polygon in polygons:
 		data_polygon = get_polygon_data(polygon)
-		data_polygons.append(data_polygon)
 
 		# get main polygon
+		# 0 main polygon 1 environment polygon 2 couple polygon
 		if is_in_polygon(main_label, polygon):
-			main_polygon = data_polygon.copy()
+			data_polygon = np.append(data_polygon, 0) # main polygon
+		else:
+			couple_flag = 0
+			# get environment polygon
+			for label in labels:
+				if label != main_label and is_in_polygon(label, polygon):
+					couple_flag = 1
+					break
 
-		# get environment polygon
-		for label in labels:
-			if label != main_label and is_in_polygon(label, polygon):
-				env_polygons_id.append(i)
-				break
+			if couple_flag:
+				data_polygon = np.append(data_polygon, 2) # couple polygon
+			else:
+				data_polygon = np.append(data_polygon, 1) # environment polygon
 
-	# feature engineering
-	# main polygon processed
-	for i in range(len(data_polygons)):
-		data_polygons[i][0] -= main_polygon[0]
-		data_polygons[i][1] -= main_polygon[1]
-		data_polygons[i][2] -= main_polygon[2]
-
-	# environment polygon processed
-	for i in env_polygons_id:
-		data_polygons[i][3] = -data_polygons[i][3] # width
-		data_polygons[i][4] = -data_polygons[i][4] # height
-
-	# sort
-	data_polygons.sort(key=cmp_to_key(cmp))
+		data_polygons.append(data_polygon)
 
 	return data_polygons
 
@@ -319,6 +305,6 @@ def convert_data_parallel(dir_prj, pattern_num, num_process=8):
 
 
 if __name__ == "__main__":
-	pattern_num = 27
-	# convert_data('D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/', pattern_num)
-	# convert_data_parallel('D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/', pattern_num
+	pattern_num = 4
+	convert_data('D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/', pattern_num)
+	# convert_data_parallel('D:/learn_more_from_life/computer/EDA/work/prj/rc_predict/', pattern_num)

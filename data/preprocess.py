@@ -5,7 +5,7 @@ sys.path.append(os.path.join(os.getcwd(), "../"))
 import numpy as np
 import pandas as pd
 
-from config import *
+from config import vertical_space, window_size, dir_prj
 
 
 def data_enhance():
@@ -16,8 +16,48 @@ def data_multi_sample():
 	pass
 
 
-def data_process():
-	pass
+def get_mask(x, y):
+	mask = np.zeros(shape=x.shape, dtype=np.int32)
+	for i in range(len(x)):
+		num = round(y[i][0])
+		if x.ndim == 3:
+			mask[i, :num, :] = 1
+		elif x.ndim == 2:
+			mask[i, :num] = 1
+
+	return mask
+
+
+def data_process(x, y):
+	new_x = x.copy()
+	# min max normalization
+	if x.ndim == 3:
+		new_x[:, :, 2] = vertical_space * new_x[:, :, 2]
+		new_x[:, :, :3] = new_x[:, :, :3] / window_size + 0.5 # xyz (0, 1)
+		new_x[:, :, 3:5] = new_x[:, :, 3:5] / window_size # width height (0, 1)
+	elif x.ndim == 2:
+		new_x[:, 2] = vertical_space * new_x[:, 2]
+		new_x[:, :3] = new_x[:, :3] / window_size + 0.5
+		new_x[:, 3:5] = new_x[:, 3:5] / window_size
+	
+	# one hot encoding
+	if x.ndim == 3:
+		cnt = (np.max(new_x[:, :, 5]) - np.min(new_x[:, :, 5]) + 1).astype(np.int32)
+		one_hot = np.eye(cnt)[new_x[:, :, 5].astype(np.int32)]
+		new_x = np.delete(new_x, 5, axis=2)
+		new_x = np.concatenate((new_x, one_hot), axis=2)
+	elif x.ndim == 2:
+		cnt = (np.max(new_x[:, 5]) - np.min(new_x[:, 5]) + 1).astype(np.int32)
+		one_hot = np.eye(cnt)[new_x[:, 5].astype(np.int32)]
+		new_x = np.delete(new_x, 5, axis=1)
+		new_x = np.concatenate((new_x, one_hot), axis=1)
+	
+	# mask
+	if y.shape == ():
+		return new_x
+	else: # vectorize the data
+		mask = get_mask(x, y)
+		return np.multiply(new_x, mask)
 
 
 if __name__ == "__main__":
