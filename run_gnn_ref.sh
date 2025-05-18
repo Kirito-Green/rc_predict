@@ -11,7 +11,7 @@ function extract_cap(){
 		for lr in ${lrs[@]}; do
 			for batch_size in ${batch_sizes[@]}; do
 				for k in ${ks[@]}; do
-					python -X faulthandler demo_gnn.py \
+					python -X faulthandler demo_gnn_ref.py \
 					--dir_prj "/home/prj/rc_predict/" \
 					--seed 42 \
 					--pattern_nums 3 4 26 \
@@ -21,10 +21,11 @@ function extract_cap(){
 					--model_name $model_name \
 					--lr $lr \
 					--batch_size $batch_size \
-					--epochs 300 \
+					--epochs 100 \
 					--load_params False \
 					--set_memory_growth True \
-					--set_multi_gpu_num 1
+					--set_multi_gpu_num 3 \
+					-nt
 				done
 			done
 		done
@@ -33,33 +34,15 @@ function extract_cap(){
 
 
 # main experiment
-model_names=("gcn")
-lrs=(1e-3)
-batch_sizes=(32)
-ks=(15)
-extract_cap $model_names $lrs $batch_sizes $ks
+# model_names=("gcn", 'gat')
+# lrs=(3e-4)
+# batch_sizes=(32)
+# ks=(15)
+# extract_cap $model_names $lrs $batch_sizes $ks
 
 # else experiment
-# model_names=("gat")
-# lrs=(1e-3)
-# batch_sizes=(32)
-# ks=(10)
-# extract_cap $model_names $lrs $batch_sizes $ks
-
-# model_names=("gcn")
-# lrs=(1e-4 1e-2)
-# batch_sizes=(32)
-# ks=(10)
-# extract_cap $model_names $lrs $batch_sizes $ks
-
-# model_names=("gcn")
-# lrs=(1e-3)
-# batch_sizes=(16 64)
-# ks=(10)
-# extract_cap $model_names $lrs $batch_sizes $ks
-
-# model_names=("gcn")
-# lrs=(1e-3)
-# batch_sizes=(32)
-# ks=(5 15 20)
-# extract_cap $model_names $lrs $batch_sizes $ks
+model_names=("gat")
+lrs=(1e-3)
+batch_sizes=(16)
+ks=(20)
+extract_cap $model_names $lrs $batch_sizes $ks

@@ -86,6 +86,7 @@ SET_MULTI_GPU_NUM = min(SET_MULTI_GPU_NUM, 4)
 NO_TRAIN = args.no_train
 TRAIN = not NO_TRAIN
 
+
 # %% [markdown]
 # ## 路径定义
 
@@ -213,7 +214,10 @@ import time
 
 # 自定义模块导入
 from data.dataset import MyDataset
-from models.gnn import GNN
+from models.gcn import GCN
+from models.graph_sage import GraphSage
+from models.gat import GAT
+from models.gin import GIN
 
 # fix seed
 random.seed(seed)
@@ -240,7 +244,7 @@ logging.info('---------------------load total data done---------------------')
 logging.info('---------------------loading couple data----------------------')
 dataset_couple = MyDataset(dir_prj=dir_prj,
                            ndm=ndm,
-                           k=K,
+                           k=K, 
                            pattern_nums=pattern_nums,
                            x_name='x_couple.npy',
                            y_name='y_couple.npy',
@@ -283,7 +287,6 @@ train_data_couple, valid_data_couple, test_data_couple = dataset_couple[0:int(n 
 # %%
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import mean_squared_error
-from tensorflow.keras.optimizers.schedules import InverseTimeDecay
 from spektral.data import BatchLoader
 from utils.model import huber_loss, mse_msre_loss, measure_ratio_bad, measure_ratio_good
 
@@ -291,14 +294,6 @@ from utils.model import huber_loss, mse_msre_loss, measure_ratio_bad, measure_ra
 # loss and weighted metrics
 loss_func = mse_msre_loss
 weighted_metrics = [measure_ratio_good]
-# initial_learning_rate / (1 + decay_rate * step / decay_step) staircase:False
-# initial_learning_rate / (1 + decay_rate * floor(step / decay_step)) staircase:True
-learning_rate_fn = InverseTimeDecay(
-    initial_learning_rate=lr,
-    decay_steps=10,
-    decay_rate=1,
-    staircase=True
-)
 
 # set multi gpu
 if SET_MULTI_GPU_NUM > 1:
@@ -311,39 +306,94 @@ if SET_MULTI_GPU_NUM > 1:
         logging.info(f'devices: {devices}')
         logging.info(
             '------------------------------------------------------------')
-        model_total = GNN(model_name=model_name, training=True)
-        model_couple = GNN(model_name=model_name, training=True)
-        model_best_total = GNN(model_name=model_name, training=True)
-        model_best_couple = GNN(model_name=model_name, training=True)
-        model_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        # GCN model
+        if model_name == 'gcn':
+            model_total = GCN(training=True)
+            model_couple = GCN(training=True)
+            model_best_total = GCN(training=True)
+            model_best_couple = GCN(training=True)
+            logging.info('buld model gcn done')
+        # GraphSAGE model
+        elif model_name == 'graph_sage':
+            model_total = GraphSage(training=True)
+            model_couple = GraphSage(training=True)
+            model_best_total = GraphSage(training=True)
+            model_best_couple = GraphSage(training=True)
+            logging.info('buld model graph_sage done')
+        # GAT model
+        elif model_name == 'gat':
+            model_total = GAT(training=True)
+            model_couple = GAT(training=True)
+            model_best_total = GAT(training=True)
+            model_best_couple = GAT(training=True)
+            logging.info('buld model gat done')
+        # GIN model
+        elif model_name == 'gin':
+            model_total = GIN(training=True)
+            model_couple = GIN(training=True)
+            model_best_total = GIN(training=True)
+            model_best_couple = GIN(training=True)
+            logging.info('buld model gin done')
+        else:
+            logging.error('model_name error')
+            raise ValueError('model_name error')
+        model_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                             loss=loss_func,
                             weighted_metrics=weighted_metrics)
-        model_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        model_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                              loss=loss_func,
                              weighted_metrics=weighted_metrics)
         # best model
-        model_best_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        model_best_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                                  loss=loss_func,
                                  weighted_metrics=weighted_metrics)
-        model_best_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        model_best_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                                   loss=loss_func,
                                   weighted_metrics=weighted_metrics)
 else:
-    model_total = GNN(model_name=model_name, training=True)
-    model_couple = GNN(model_name=model_name, training=True)
-    model_best_total = GNN(model_name=model_name, training=True)
-    model_best_couple = GNN(model_name=model_name, training=True)
-    model_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    # GCN model
+    if model_name == 'gcn':
+        model_total = GCN(training=True)
+        model_couple = GCN(training=True)
+        model_best_total = GCN(training=True)
+        model_best_couple = GCN(training=True)
+        logging.info('buld model gcn done')
+    # GraphSAGE model
+    elif model_name == 'graph_sage':
+        model_total = GraphSage(training=True)
+        model_couple = GraphSage(training=True)
+        model_best_total = GraphSage(training=True)
+        model_best_couple = GraphSage(training=True)
+        logging.info('buld model graph_sage done')
+    # GAT model
+    elif model_name == 'gat':
+        model_total = GAT(training=True)
+        model_couple = GAT(training=True)
+        model_best_total = GAT(training=True)
+        model_best_couple = GAT(training=True)
+        logging.info('buld model gat done')
+    # GIN model
+    elif model_name == 'gin':
+        model_total = GIN(training=True)
+        model_couple = GIN(training=True)
+        model_best_total = GIN(training=True)
+        model_best_couple = GIN(training=True)
+        logging.info('buld model gin done')
+    else:
+        logging.error('model_name error')
+        raise ValueError('model_name error')
+
+    model_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                         loss=loss_func,
                         weighted_metrics=weighted_metrics)
-    model_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    model_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                          loss=loss_func,
                          weighted_metrics=weighted_metrics)
     # best model
-    model_best_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    model_best_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                              loss=loss_func,
                              weighted_metrics=weighted_metrics)
-    model_best_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    model_best_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                               loss=loss_func,
                               weighted_metrics=weighted_metrics)
 
@@ -527,7 +577,10 @@ from utils.model import gnn_analysis, gnn_plot, test_runtime
 # build model
 loader = BatchLoader(
     train_data_total[:batch_size], batch_size=batch_size, shuffle=True)
-model_total = GNN(model_name=model_name, training=False)
+model_total = GCN(training=False) if model_name == 'gcn' else GraphSage(
+    training=False) if model_name == 'graph_sage' else GAT(
+    training=False) if model_name == 'gat' else GIN(
+    training=False) if model_name == 'gin' else None
 model_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                     loss=loss_func,
                     weighted_metrics=weighted_metrics)
@@ -713,7 +766,10 @@ from utils.model import gnn_analysis
 # build model
 loader = BatchLoader(
     train_data_couple[:batch_size], batch_size=batch_size, shuffle=True)
-model_couple = GNN(model_name=model_name, training=False)
+model_couple = GCN(training=False) if model_name == 'gcn' else GraphSage(
+    training=False) if model_name == 'graph_sage' else GAT(
+    training=False) if model_name == 'gat' else GIN(
+    training=False) if model_name == 'gin' else None
 model_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                      loss=loss_func,
                      weighted_metrics=weighted_metrics)
@@ -751,7 +807,7 @@ couple_avg_time = test_runtime(model_couple, batch_size,
                                 test_data_couple, yc_test)
 # all time
 avg_time = total_avg_time + couple_avg_time
-print('all avg time:', avg_time)
+logging.info(f'all avg time: {avg_time}')
 
 # save results
 data_couple.to_csv(os.path.join(

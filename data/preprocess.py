@@ -2,109 +2,120 @@ import os
 import sys
 sys.path.append(os.path.join(os.getcwd(), "../"))
 
-import numpy as np
 import pandas as pd
+import numpy as np
 
-from config import vertical_space, window_size, dir_prj
+from config import *
+from utils.gds import extract_data_from_gds, paths2polygons
 
 
 def data_enhance():
-	pass
+    pass
 
 
 def data_multi_sample():
-	pass
+    pass
 
 
 def get_mask(x, y):
-	mask = np.zeros(shape=x.shape, dtype=np.int32)
-	for i in range(len(x)):
-		num = round(y[i][0])
-		if x.ndim == 3:
-			mask[i, :num, :] = 1
-		elif x.ndim == 2:
-			mask[i, :num] = 1
+    mask = np.zeros(shape=x.shape, dtype=np.int32)
+    for i in range(len(x)):
+        num = round(y[i][0])
+        if x.ndim == 3:
+            mask[i, :num, :] = 1
+        elif x.ndim == 2:
+            mask[i, :num] = 1
 
-	return mask
+    return mask
 
 
-def data_process(x, y):
-	new_x = x.copy()
-	# min max normalization
-	if x.ndim == 3:
-		new_x[:, :, 2] = vertical_space * new_x[:, :, 2]
-		new_x[:, :, :3] = new_x[:, :, :3] / window_size + 0.5 # xyz (0, 1)
-		new_x[:, :, 3:5] = new_x[:, :, 3:5] / window_size # width height (0, 1)
-	elif x.ndim == 2:
-		new_x[:, 2] = vertical_space * new_x[:, 2]
-		new_x[:, :3] = new_x[:, :3] / window_size + 0.5
-		new_x[:, 3:5] = new_x[:, 3:5] / window_size
-	
-	# one hot encoding
-	if x.ndim == 3:
-		cnt = (np.max(new_x[:, :, 5]) - np.min(new_x[:, :, 5]) + 1).astype(np.int32)
-		one_hot = np.eye(cnt)[new_x[:, :, 5].astype(np.int32)]
-		new_x = np.delete(new_x, 5, axis=2)
-		new_x = np.concatenate((new_x, one_hot), axis=2)
-	elif x.ndim == 2:
-		cnt = (np.max(new_x[:, 5]) - np.min(new_x[:, 5]) + 1).astype(np.int32)
-		one_hot = np.eye(cnt)[new_x[:, 5].astype(np.int32)]
-		new_x = np.delete(new_x, 5, axis=1)
-		new_x = np.concatenate((new_x, one_hot), axis=1)
-	
-	# mask
-	if y.shape == ():
-		return new_x
-	else: # vectorize the data
-		mask = get_mask(x, y)
-		return np.multiply(new_x, mask)
+def data_filter(x, y): # 剔除异常值
+    new_x = []
+    new_y = []
+    for i in range(len(x)):
+        if y[i] >= cap_thresh:
+            new_x.append(x[i])
+            new_y.append(y[i])
+
+    return new_x, new_y
+
+
+def get_concat(x):
+    new_x = x[0]
+    for i in range(1, len(x)):
+        new_x = np.concatenate((new_x, x[i]), axis=0)
+
+    return np.array(new_x, dtype=np.float32)
+
+
+def data_norm(x, method='z_score'):
+    new_x = []
+
+    # min max normalization
+    if method == 'min_max':
+        all_x = get_concat(x)
+        min_x = np.min(all_x, axis=0)
+        max_x = np.max(all_x, axis=0)
+        for x_ in x:
+            temp_x = x_.copy()
+            cols = 5
+            temp_x[:, :cols] = (temp_x[:, :cols] - min_x[:cols]) / (max_x[:cols] - min_x[:cols])
+            new_x.append(temp_x)
+    elif method == 'z_score':
+        all_x = get_concat(x)
+        mean_x = np.mean(all_x, axis=0)
+        std_x = np.std(all_x, axis=0)
+        std_x[std_x == 0] = 1e-8
+        for x_ in x:
+            temp_x = x_.copy()
+            cols = 5
+            temp_x[:, :cols] = (temp_x[:, :cols] - mean_x[:cols]) / std_x[:cols]
+            new_x.append(temp_x)
+    else:
+        raise ValueError("method must be min_max or z_score")
+    
+    return new_x
+
+
+def data_norm_special(x):
+    # special min max normalization
+    new_x = []
+    for x_ in x:
+        temp_x = np.array(x_.copy(), dtype=np.float32)
+        temp_x[:, 2] = vertical_space * temp_x[:, 2]
+        temp_x[:, :3] = temp_x[:, :3] / window_size + 0.5
+        temp_x[:, 3:5] = temp_x[:, 3:5] / max_length
+        new_x.append(temp_x)
+
+    return new_x
+
+
+def data_encode(x):
+    # one hot encoding
+    new_x = []
+    for x_ in x:
+        temp_x = np.array(x_.copy(), dtype=np.float32)
+        cnt = (np.max(temp_x[:, 5]) - np.min(temp_x[:, 5]) + 1).astype(np.int32)
+        one_hot = np.eye(cnt)[temp_x[:, 5].astype(np.int32)]
+        temp_x = np.delete(temp_x, 5, axis=1)
+        temp_x = np.concatenate((temp_x, one_hot), axis=1)
+        new_x.append(temp_x)
+
+    return new_x
+
+
+def data_preprocess(x, y, special=False):
+    if special:
+        new_x, new_y = data_filter(x, y)
+        new_x = data_norm_special(new_x)
+        new_x = data_encode(new_x)
+    else:
+        new_x, new_y = data_filter(x, y)
+        new_x = data_norm(new_x)
+        new_x = data_encode(new_x)
+
+    return new_x, new_y
 
 
 if __name__ == "__main__":
-	# analysis the data
-	pattern_nums = []
-	dir_path = os.path.join(dir_prj, "data/raw_data")
-	files = os.listdir(dir_path)
-	for file in files:
-		if file.startswith('pattern'):
-			pattern_num = file.split('pattern')[1]
-			pattern_nums.append(pattern_num)
-	print('pattern numbers:', pattern_nums)
-
-	nums = []
-	total_cap_3d_all = []
-	couple_cap_3d_all = []
-	for pattern_num in pattern_nums:
-		dir_pattern = os.path.join(dir_prj, "data/raw_data/pattern{}".format(pattern_num))
-
-		id = 1
-		while True:
-			if os.path.exists(os.path.join(dir_pattern, "analysis_results")):
-				path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results/result_all.csv".format(pattern_num))
-				data_file = pd.read_csv(path_csv)
-				id = -1
-			else:
-				path_csv = os.path.join(dir_prj, "data/raw_data/pattern{}/analysis_results_{}/result_all.csv".format(pattern_num, id))
-				if not os.path.exists(path_csv):
-					break
-				data_file = pd.read_csv(path_csv)
-
-			total_cap_3d = data_file['total_cap_3d']
-			couple_cap_3d = data_file['couple_cap_3d']
-
-			nums.append(len(total_cap_3d))
-			total_cap_3d_all.append(total_cap_3d)
-			couple_cap_3d_all.append(couple_cap_3d)
-
-			if id == -1:
-				break
-			else:
-				id += 1
-
-	# analysis the data
-	total_cap_3d_all = np.array([element for sub_list in total_cap_3d_all for element in sub_list])
-	couple_cap_3d_all = np.array([element for sub_list in couple_cap_3d_all for element in sub_list])
-	print('nums:', nums)
-	print(np.min(total_cap_3d_all), np.max(total_cap_3d_all), np.mean(total_cap_3d_all), np.std(total_cap_3d_all))
-	print(np.min(couple_cap_3d_all), np.max(couple_cap_3d_all), np.mean(couple_cap_3d_all), np.std(couple_cap_3d_all))
-	print(np.sum(total_cap_3d_all==0), np.sum(couple_cap_3d_all==0))
+    pass

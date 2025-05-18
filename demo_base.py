@@ -31,8 +31,8 @@ parser.add_argument('--seed', type=int, default=seed,
 										help='random seed')
 parser.add_argument('--pattern_nums', type=int, nargs='+', default=pattern_nums,
 										help='pattern nums')
-parser.add_argument('--thresh', type=int, nargs='+', default=thresh,
-										help='threshold')
+parser.add_argument('--nodes_range', type=int, nargs='+', default=nodes_range,
+										help='the range of numbers of polygons')
 parser.add_argument('--num_process', type=int, default=num_process,
 										help='multiprocessing number')
 parser.add_argument('--n_components', type=int, default=n_components,
@@ -54,7 +54,7 @@ args = parser.parse_args()
 dir_prj = args.dir_prj
 seed = args.seed
 pattern_nums = args.pattern_nums
-thresh = args.thresh
+nodes_range = args.nodes_range
 num_process = args.num_process
 n_components = args.n_components
 DISABLE_NORM = args.disable_norm
@@ -144,16 +144,16 @@ def data_process_sample(x, y, cnt_max): # 单类样本采样最大限制
 
 	return new_x, new_y
 
-def data_process_truncate(x, y, thresh, reserve=False): # 双边 [0 3000] # 矩阵大小截断 筛选可选
-	thresh = np.array(thresh, dtype=np.int32)
+def data_process_truncate(x, y, nodes_range, reserve=False): # 双边 [0 3000] # 矩阵大小截断 筛选可选
+	nodes_range = np.array(nodes_range, dtype=np.int32)
 	raw_num = np.array([len(i) for i in x]).reshape(-1, 1)
-	valid_num = np.array([thresh[1] if len(i) > thresh[1] else len(i) for i in x], dtype=np.int32).reshape(-1, 1)
+	valid_num = np.array([nodes_range[1] if len(i) > nodes_range[1] else len(i) for i in x], dtype=np.int32).reshape(-1, 1)
 	if reserve:
 		mask_reserve = np.ones(shape=(len(x),), dtype=np.bool_)
 	else:
-		mask_reserve = (thresh[0] <= raw_num) & (raw_num <= thresh[1])
+		mask_reserve = (nodes_range[0] <= raw_num) & (raw_num <= nodes_range[1])
 	sum_reserve = np.sum(mask_reserve, dtype=np.int32)
-	new_x = np.zeros(shape=(sum_reserve, thresh[1], 5), dtype=np.float32)
+	new_x = np.zeros(shape=(sum_reserve, nodes_range[1], 5), dtype=np.float32)
 	new_y = np.zeros(shape=(sum_reserve, 1), dtype=np.float32)
 	index = 0
 	for i, num in enumerate(valid_num):
@@ -199,8 +199,8 @@ for pattern_num in pattern_nums:
 	x_total_, y_total_ = data_process_sample(x_total_, y_total_, cnt_max=cnt_max)
 	x_couple_, y_couple_ = data_process_sample(x_couple_, y_couple_, cnt_max=cnt_max)
 	# data truncate
-	x_total_, y_total_, total_raw_nums = data_process_truncate(x_total_, y_total_, thresh, reserve=False)
-	x_couple_, y_couple_, _ = data_process_truncate(x_couple_, y_couple_, thresh, reserve=False)
+	x_total_, y_total_, total_raw_nums = data_process_truncate(x_total_, y_total_, nodes_range, reserve=False)
+	x_couple_, y_couple_, _ = data_process_truncate(x_couple_, y_couple_, nodes_range, reserve=False)
 
 	# concatenate data
 	if len(x_total) == 0:
@@ -254,7 +254,7 @@ logging.info(f'y couple train first 10 samples\n {y_couple_train[:10]}')
 
 # %%
 # min max 
-from data.preprocess import data_process, data_process
+from data.preprocess import data_norm, data_norm
 
 
 if DISABLE_NORM:
@@ -266,12 +266,12 @@ if DISABLE_NORM:
 	x_couple_test_norm_flat = x_couple_test.reshape(len(x_couple_test), -1)
 else:
 	# 数据归一化
-	x_total_train_norm = data_process(x_total_train, y_total_train)
-	x_total_valid_norm = data_process(x_total_valid, y_total_valid)
-	x_total_test_norm = data_process(x_total_test, y_total_test)
-	x_couple_train_norm = data_process(x_couple_train, y_couple_train)
-	x_couple_valid_norm = data_process(x_couple_valid, y_couple_valid)
-	x_couple_test_norm = data_process(x_couple_test, y_couple_test)
+	x_total_train_norm = data_norm(x_total_train, y_total_train)
+	x_total_valid_norm = data_norm(x_total_valid, y_total_valid)
+	x_total_test_norm = data_norm(x_total_test, y_total_test)
+	x_couple_train_norm = data_norm(x_couple_train, y_couple_train)
+	x_couple_valid_norm = data_norm(x_couple_valid, y_couple_valid)
+	x_couple_test_norm = data_norm(x_couple_test, y_couple_test)
 
 	## 数据扁平化
 	x_total_train_norm_flat = x_total_train_norm.reshape(len(x_total_train_norm), -1)

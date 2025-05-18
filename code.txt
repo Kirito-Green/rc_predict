@@ -1,3 +1,201 @@
+models/gcn.py:
+
+from config import *
+from tensorflow.keras.initializers import GlorotUniform, HeUniform
+from tensorflow.keras.layers import Dropout, Dense
+from tensorflow.keras.models import Model
+import tensorflow as tf
+from spektral.layers import GCNConv, GlobalAvgPool, GlobalMaxPool, GlobalSumPool, DiffPool
+import sys
+import os
+sys.path.append(os.path.join(os.getcwd(), '../'))
+
+
+class GCN(Model):
+    '''
+    Graph Convolutional Network (GCN) model for graph prediction.
+    '''
+
+    def __init__(self, **kwargs):
+        '''
+        激活函数有: sigmoid, tanh, softmax, relu, leaky_relu, prelu, elu, selu, swish, mish
+        Xavier(glorot)初始化适用于tanh、sigmoid
+        he initializer适用于relu
+
+        '''
+        super().__init__()
+        self.conv_layers_num = 3
+        self.hidden_dim = 32
+        self.droupout_rate = 0.5
+        self.activation = 'relu'  # tanh
+        self.pool_func = 'sum'
+        self.readout_mode = 'single'  # single concat
+        # droupout
+        if 'training' in kwargs:
+            self.training = kwargs['training']
+        else:
+            self.training = True
+
+        if self.activation == 'relu':
+            self.kernel_initializer = HeUniform()
+        else:
+            self.kernel_initializer = GlorotUniform()
+
+        self.conv_layers = []
+        for i in range(self.conv_layers_num):
+            self.conv_layers.append(GCNConv(
+                self.hidden_dim, activation=self.activation, kernel_initializer=self.kernel_initializer))
+
+        if self.pool_func == 'avg':
+            self.pool = GlobalAvgPool()
+        elif self.pool_func == 'max':
+            self.pool = GlobalMaxPool()
+        elif self.pool_func == 'sum':
+            self.pool = GlobalSumPool()
+        else:
+            raise ValueError('pool_func must be one of [avg, max, sum]')
+
+        self.fc1 = Dense(2 * self.hidden_dim, activation=self.activation)
+        self.fc2 = Dense(1, activation='linear')
+
+    def add_self_loop(self, a):
+        diag_values = tf.linalg.diag_part(a)
+        mask_zero = abs(diag_values) < tolerant_zero_error
+        diag_values = tf.where(mask_zero, 1.0, 0.0)
+        diag_matrix = tf.linalg.diag(diag_values)
+        a_hat = a + diag_matrix
+
+        return a_hat
+
+    def norm_a(self, a):
+        # calculate the degree matrix
+        d_values = tf.reduce_sum(a, axis=-1)
+        d_minus_sqrt_values = tf.pow(d_values, -0.5)
+        d_minus_sqrt = tf.linalg.diag(d_minus_sqrt_values)
+        # calculate the normalized adjacency matrix
+        a_norm = tf.matmul(tf.matmul(d_minus_sqrt, a), d_minus_sqrt)
+
+        return a_norm
+
+    def call(self, inputs):
+        x, a = inputs
+        x = tf.cast(x, tf.float32)
+        a = tf.cast(a, tf.float32)
+        a = self.add_self_loop(a)
+        a = self.norm_a(a)
+
+        if self.readout_mode == 'single':
+            # GCN layer
+            for conv in self.conv_layers:
+                x = conv([x, a])
+
+            # Readout
+            res = self.pool(x)
+        elif self.readout_mode == 'concat':
+            # GCN layer
+            h = []
+            h.append(self.pool(x))
+            for conv in self.conv_layers:
+                x = conv([x, a])
+                h.append(self.pool(x))
+
+            # Readout
+            # res = concat(h1, h2, h3, ...)
+            res = h[0]
+            for i in range(1, len(h)):
+                res = tf.concat([res, h[i]], axis=-1)
+        else:
+            raise ValueError('readout_mode must be one of [single, concat]')
+
+        # FC
+        x = self.fc1(res)
+        x = self.fc2(x)
+
+        return x
+
+
+if __name__ == "__main__":
+    # model build
+    model_total = GCN()
+    model_couple = GCN()
+    print('model build done')
+models/gat.py:
+
+from tensorflow.keras.initializers import GlorotUniform, HeUniform
+from tensorflow.keras.layers import Dropout, Dense
+from tensorflow.keras.models import Model
+import tensorflow as tf
+from spektral.layers import GATConv, GlobalAvgPool, GlobalMaxPool, GlobalSumPool, DiffPool
+import sys
+import os
+sys.path.append(os.path.join(os.getcwd(), '../'))
+
+
+class GAT(Model):
+    '''
+    Graph Attention Network (GAT) model for graph prediction.
+    '''
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.hidden_dim = 32
+        self.num_heads = 3
+        self.droupout_rate = 0.5
+        self.activation = 'relu'  # tanh
+        if 'training' in kwargs:
+            self.training = kwargs['training']
+        else:
+            self.training = True
+
+        if self.activation == 'relu':
+            self.kernel_initializer = HeUniform()
+        else:
+            self.kernel_initializer = GlorotUniform()
+        self.conv1 = GATConv(self.hidden_dim, attn_heads=self.num_heads, concat_heads=False,
+                             activation=self.activation, kernel_initializer=self.kernel_initializer)  # [batch, n, 16]
+        # self.d1 = Dropout(self.droupout_rate)
+        self.conv2 = GATConv(self.hidden_dim, attn_heads=self.num_heads, concat_heads=False,
+                             activation=self.activation, kernel_initializer=self.kernel_initializer)  # [batch 256, 16]
+        # self.d2 = Dropout(self.droupout_rate)
+        self.conv3 = GATConv(self.hidden_dim, attn_heads=self.num_heads, concat_heads=False,
+                             activation=self.activation, kernel_initializer=self.kernel_initializer)  # [batch 64, 16]
+        # self.d3 = Dropout(self.droupout_rate)
+        # self.pool = GlobalAvgPool()
+        self.pool = GlobalMaxPool()
+        # self.pool = GlobalSumPool()
+        self.fc1 = Dense(self.hidden_dim * 2, activation=self.activation)
+        self.fc2 = Dense(1, activation='linear')
+
+    def call(self, inputs):
+        x, a = inputs
+        x = tf.cast(x, tf.float32)
+        a = tf.cast(a, tf.float32)
+
+        # GAT
+        a = tf.sparse.from_dense(a)
+        x = self.conv1([x, a])
+        # x = self.d1(x, training=self.training)
+        x = self.conv2([x, a])
+        # x = self.d2(x, training=self.training)
+        x = self.conv3([x, a])
+        # x = self.d3(x, training=self.training)
+
+        # readout layer
+        x = self.pool(x)
+
+        # FC
+        x = self.fc1(x)
+        x = self.fc2(x)
+
+        return x
+
+
+if __name__ == "__main__":
+    # model build
+    model_total = GAT()
+    model_couple = GAT()
+demo_gnn.py:
+
 # %% [markdown]
 # # GNN模型预测版图寄生电容
 
@@ -39,13 +237,11 @@ parser.add_argument('--seed', type=int, default=seed,
 parser.add_argument('--pattern_nums', type=int, nargs='+', default=pattern_nums,
                     help='pattern nums')
 parser.add_argument('--nodes_range', type=int, nargs='+', default=nodes_range,
-                    help='the range of number of nodes')
+                    help='the range of nodes' number)
 parser.add_argument('--num_process', type=int, default=num_process,
                     help='multiprocessing number')
 parser.add_argument('--ndm', type=int, default=ndm,
                     help='number of neighbor distance maximum')
-parser.add_argument('--k', type=int, default=K,
-                    help='number of neighbors')
 parser.add_argument('--model_name', type=str, default=model_name,
                     help='model name [gcn, graph_sage, gat]')
 parser.add_argument('--lr', type=float, default=lr,
@@ -73,7 +269,6 @@ pattern_nums = args.pattern_nums
 nodes_range = args.nodes_range
 num_process = args.num_process
 ndm = args.ndm
-K = args.k
 model_name = args.model_name
 lr = args.lr
 batch_size = args.batch_size
@@ -120,9 +315,9 @@ if not os.path.exists(dir_tensorboard):
 import logging
 
 
-save_name = f'{model_name}_lr{lr}_batchsize{batch_size}_epochs{epochs}_k{K}_seed{seed}'
 console_handler = logging.StreamHandler()
-file_handler = logging.FileHandler(os.path.join(dir_logs, (f'{save_name}.log')), mode='w', encoding='utf-8')
+file_handler = logging.FileHandler(os.path.join(dir_logs, (f'{model_name}_lr{lr}_batchsize{batch_size}'
+                                                           f'_epochs{epochs}_ndm{ndm}_seed{seed}.log')), mode='w', encoding='utf-8')
 
 # 设置日志格式
 logging.basicConfig(
@@ -213,6 +408,10 @@ import time
 
 # 自定义模块导入
 from data.dataset import MyDataset
+from models.gcn import GCN
+from models.graph_sage import GraphSage
+from models.gat import GAT
+from models.gin import GIN
 from models.gnn import GNN
 
 # fix seed
@@ -228,7 +427,6 @@ tf.random.set_seed(seed)
 logging.info('---------------------loading total data-----------------------')
 dataset_total = MyDataset(dir_prj=dir_prj,
                           ndm=ndm,
-                          k=K,
                           pattern_nums=pattern_nums,
                           x_name='x_total.npy',
                           y_name='y_total.npy',
@@ -240,7 +438,6 @@ logging.info('---------------------load total data done---------------------')
 logging.info('---------------------loading couple data----------------------')
 dataset_couple = MyDataset(dir_prj=dir_prj,
                            ndm=ndm,
-                           k=K,
                            pattern_nums=pattern_nums,
                            x_name='x_couple.npy',
                            y_name='y_couple.npy',
@@ -283,22 +480,13 @@ train_data_couple, valid_data_couple, test_data_couple = dataset_couple[0:int(n 
 # %%
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import mean_squared_error
-from tensorflow.keras.optimizers.schedules import InverseTimeDecay
 from spektral.data import BatchLoader
-from utils.model import huber_loss, mse_msre_loss, measure_ratio_bad, measure_ratio_good
+from utils.model import huber_loss, mse_msre_loss, measure_ratio_bad
 
 
 # loss and weighted metrics
 loss_func = mse_msre_loss
-weighted_metrics = [measure_ratio_good]
-# initial_learning_rate / (1 + decay_rate * step / decay_step) staircase:False
-# initial_learning_rate / (1 + decay_rate * floor(step / decay_step)) staircase:True
-learning_rate_fn = InverseTimeDecay(
-    initial_learning_rate=lr,
-    decay_steps=10,
-    decay_rate=1,
-    staircase=True
-)
+weighted_metrics = [measure_ratio_bad]
 
 # set multi gpu
 if SET_MULTI_GPU_NUM > 1:
@@ -311,39 +499,101 @@ if SET_MULTI_GPU_NUM > 1:
         logging.info(f'devices: {devices}')
         logging.info(
             '------------------------------------------------------------')
+        # # GCN model
+        # if model_name == 'gcn':
+        #     model_total = GCN(training=True)
+        #     model_couple = GCN(training=True)
+        #     model_best_total = GCN(training=True)
+        #     model_best_couple = GCN(training=True)
+        #     logging.info('buld model gcn done')
+        # # GraphSAGE model
+        # elif model_name == 'graph_sage':
+        #     model_total = GraphSage(training=True)
+        #     model_couple = GraphSage(training=True)
+        #     model_best_total = GraphSage(training=True)
+        #     model_best_couple = GraphSage(training=True)
+        #     logging.info('buld model graph_sage done')
+        # # GAT model
+        # elif model_name == 'gat':
+        #     model_total = GAT(training=True)
+        #     model_couple = GAT(training=True)
+        #     model_best_total = GAT(training=True)
+        #     model_best_couple = GAT(training=True)
+        #     logging.info('buld model gat done')
+        # # GIN model
+        # elif model_name == 'gin':
+        #     model_total = GIN(training=True)
+        #     model_couple = GIN(training=True)
+        #     model_best_total = GIN(training=True)
+        #     model_best_couple = GIN(training=True)
+        #     logging.info('buld model gin done')
+        # else:
+        #     logging.error('model_name error')
+        #     raise ValueError('model_name error')
         model_total = GNN(model_name=model_name, training=True)
         model_couple = GNN(model_name=model_name, training=True)
         model_best_total = GNN(model_name=model_name, training=True)
         model_best_couple = GNN(model_name=model_name, training=True)
-        model_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        model_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                             loss=loss_func,
                             weighted_metrics=weighted_metrics)
-        model_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        model_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                              loss=loss_func,
                              weighted_metrics=weighted_metrics)
         # best model
-        model_best_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        model_best_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                                  loss=loss_func,
                                  weighted_metrics=weighted_metrics)
-        model_best_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+        model_best_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                                   loss=loss_func,
                                   weighted_metrics=weighted_metrics)
 else:
+    # # GCN model
+    # if model_name == 'gcn':
+    #     model_total = GCN(training=True)
+    #     model_couple = GCN(training=True)
+    #     model_best_total = GCN(training=True)
+    #     model_best_couple = GCN(training=True)
+    #     logging.info('buld model gcn done')
+    # # GraphSAGE model
+    # elif model_name == 'graph_sage':
+    #     model_total = GraphSage(training=True)
+    #     model_couple = GraphSage(training=True)
+    #     model_best_total = GraphSage(training=True)
+    #     model_best_couple = GraphSage(training=True)
+    #     logging.info('buld model graph_sage done')
+    # # GAT model
+    # elif model_name == 'gat':
+    #     model_total = GAT(training=True)
+    #     model_couple = GAT(training=True)
+    #     model_best_total = GAT(training=True)
+    #     model_best_couple = GAT(training=True)
+    #     logging.info('buld model gat done')
+    # # GIN model
+    # elif model_name == 'gin':
+    #     model_total = GIN(training=True)
+    #     model_couple = GIN(training=True)
+    #     model_best_total = GIN(training=True)
+    #     model_best_couple = GIN(training=True)
+    #     logging.info('buld model gin done')
+    # else:
+    #     logging.error('model_name error')
+    #     raise ValueError('model_name error')
     model_total = GNN(model_name=model_name, training=True)
     model_couple = GNN(model_name=model_name, training=True)
     model_best_total = GNN(model_name=model_name, training=True)
     model_best_couple = GNN(model_name=model_name, training=True)
-    model_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    model_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                         loss=loss_func,
                         weighted_metrics=weighted_metrics)
-    model_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    model_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                          loss=loss_func,
                          weighted_metrics=weighted_metrics)
     # best model
-    model_best_total.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    model_best_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                              loss=loss_func,
                              weighted_metrics=weighted_metrics)
-    model_best_couple.compile(optimizer=Adam(learning_rate=learning_rate_fn, epsilon=epsilon),
+    model_best_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                               loss=loss_func,
                               weighted_metrics=weighted_metrics)
 
@@ -351,8 +601,10 @@ else:
 # ## 模型导入
 
 # %%
-model_total_load_path = os.path.join(dir_params, f'total_{save_name}.h5')
-model_couple_load_path = os.path.join(dir_params, f'couple_{save_name}.h5')
+model_total_load_path = os.path.join(
+    dir_params, f'{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.h5')
+model_couple_load_path = os.path.join(
+    dir_params, f'{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.h5')
 
 # load model
 if os.path.exists(model_total_load_path) and LOAD_PARAMS:
@@ -425,7 +677,7 @@ if not USE_TENSORBOARD and TRAIN:
         # save model every model_save_freq epochs
         if (epoch + 1) % model_save_freq == 0:
             model_total_save_path = os.path.join(
-                dir_params, f'total_{save_name}.h5')
+                dir_params, f'{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epoch}_ndm{ndm}_seed{seed}.h5')
             model_total.save_weights(model_total_save_path)
 
         # save best model on validation set
@@ -442,7 +694,7 @@ if not USE_TENSORBOARD and TRAIN:
 
     # save best model
     model_total_save_path = os.path.join(
-        dir_params, f'total_best_{save_name}.h5')
+        dir_params, f'{model_name}_total_best_lr{lr}_batchsize{batch_size}_epochs{best_epoch}of{epochs}_ndm{ndm}_seed{seed}.h5')
     model_best_total.save_weights(model_total_save_path)
     model_total.summary()
 
@@ -456,7 +708,7 @@ if not USE_TENSORBOARD and TRAIN:
 
     # save picture
     plt_save_path = os.path.join(
-        dir_results, f"total_{save_name}.jpg")
+        dir_results, f"{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.jpg")
     plt.savefig(plt_save_path)
 
 # %% [markdown]
@@ -471,15 +723,15 @@ if USE_TENSORBOARD and TRAIN:
     loader_valid = BatchLoader(
         valid_data_total, batch_size=batch_size, shuffle=True)
 
-    tb_callback = tf.keras.callbacks.TensorBoard(
-        log_dir=os.path.join(dir_tensorboard, f'total_{save_name}'))
+    tb_callback = tf.keras.callbacks.TensorBoard(log_dir=os.path.join(dir_tensorboard, (f'{model_name}_total_lr{lr}'
+                                                                                        f'_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}')))
     log_callback = tf.keras.callbacks.LambdaCallback(
         on_epoch_end=lambda epoch, logs: logging.info(
             f'total model:{model_name} epoch:{epoch} loss:{logs["loss"]} val_loss:{logs["val_loss"]}')
     )
     save_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=os.path.join(
-            dir_params, f'total_best_{save_name}.h5'),
+            dir_params, f'{model_name}_total_best_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.h5'),
         monitor='val_loss',
         save_best_only=True,
         save_weights_only=True,
@@ -513,20 +765,24 @@ if USE_TENSORBOARD and TRAIN:
 
     # save picture
     plt_save_path = os.path.join(
-        dir_results, f"total_{save_name}.jpg")
+        dir_results, f"{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.jpg")
     plt.savefig(plt_save_path)
 
 # %% [markdown]
 # #### 模型测试
 
 # %%
-from utils.model import gnn_analysis, gnn_plot, test_runtime
+from utils.model import gnn_analysis, gnn_plot
 
 
 # best model load
 # build model
 loader = BatchLoader(
     train_data_total[:batch_size], batch_size=batch_size, shuffle=True)
+# model_total = GCN(training=False) if model_name == 'gcn' else GraphSage(
+#     training=False) if model_name == 'graph_sage' else GAT(
+#     training=False) if model_name == 'gat' else GIN(
+#     training=False) if model_name == 'gin' else None
 model_total = GNN(model_name=model_name, training=False)
 model_total.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                     loss=loss_func,
@@ -535,7 +791,7 @@ model_total.fit(loader.load(),
                 steps_per_epoch=1,
                 epochs=1)
 model_total_load_path = os.path.join(
-    dir_params, f'total_best_{save_name}.h5')
+    dir_params, f'{model_name}_total_best_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.h5')
 if os.path.exists(model_total_load_path):
     model_total.load_weights(model_total_load_path)
 else:
@@ -558,15 +814,11 @@ gnn_plot(model_total, batch_size,
          train_data_total, yt_train,
          valid_data_total, yt_valid,
          test_data_total, yt_test, dir=dir_results,
-         name=f'total_{save_name}')
-
-# runtime test
-total_avg_time = test_runtime(model_total, batch_size,
-                              test_data_total, yt_test)
+         name=f'{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}')
 
 # save results
 data_total.to_csv(os.path.join(
-    dir_results, f"total_{save_name}.csv"), index=False)
+    dir_results, f"{model_name}_total_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.csv"), index=False)
 
 # %% [markdown]
 # ### 耦合电容模型
@@ -612,7 +864,7 @@ if (not USE_TENSORBOARD) and TRAIN:
         # save model every model_save_freq epochs
         if (epoch + 1) % model_save_freq == 0:
             model_couple_save_path = os.path.join(
-                dir_params, f'couple_{save_name}.h5')
+                dir_params, f'{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epoch}_ndm{ndm}_seed{seed}.h5')
             model_couple.save_weights(model_couple_save_path)
 
         # save best model on validation set
@@ -629,7 +881,7 @@ if (not USE_TENSORBOARD) and TRAIN:
 
     # save best model
     model_couple_save_path = os.path.join(
-        dir_params, f'couple_best_{save_name}.h5')
+        dir_params, f'{model_name}_couple_best_lr{lr}_batchsize{batch_size}_epochs{best_epoch}of{epochs}_ndm{ndm}_seed{seed}.h5')
     model_best_couple.save_weights(model_couple_save_path)
     model_couple.summary()
 
@@ -643,7 +895,7 @@ if (not USE_TENSORBOARD) and TRAIN:
 
     # save picture
     plt_save_path = os.path.join(
-        dir_results, f"couple_{save_name}.jpg")
+        dir_results, f"{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.jpg")
     plt.savefig(plt_save_path)
 
 # %% [markdown]
@@ -658,15 +910,15 @@ if USE_TENSORBOARD and TRAIN:
     loader_valid = BatchLoader(
         valid_data_couple, batch_size=batch_size, shuffle=True)
 
-    tf_callback = tf.keras.callbacks.TensorBoard(
-        log_dir=os.path.join(dir_tensorboard, f'couple_{save_name}'))
+    tf_callback = tf.keras.callbacks.TensorBoard(log_dir=os.path.join(dir_tensorboard, (f'{model_name}_couple_lr{lr}'
+                                                                                        f'_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}')))
     log_callback = tf.keras.callbacks.LambdaCallback(
         on_epoch_end=lambda epoch, logs: logging.info(
             f'couple model:{model_name} epoch:{epoch} loss:{logs["loss"]} val_loss:{logs["val_loss"]}')
     )
     save_callback = tf.keras.callbacks.ModelCheckpoint(
         filepath=os.path.join(
-            dir_params, f'couple_best_{save_name}.h5'),
+            dir_params, f'{model_name}_couple_best_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.h5'),
         monitor='val_loss',
         save_best_only=True,
         save_weights_only=True,
@@ -699,7 +951,7 @@ if USE_TENSORBOARD and TRAIN:
 
     # save picture
     plt_save_path = os.path.join(
-        dir_results, f"couple_{save_name}.jpg")
+        dir_results, f"{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.jpg")
     plt.savefig(plt_save_path)
 
 # %% [markdown]
@@ -713,6 +965,10 @@ from utils.model import gnn_analysis
 # build model
 loader = BatchLoader(
     train_data_couple[:batch_size], batch_size=batch_size, shuffle=True)
+# model_couple = GCN(training=False) if model_name == 'gcn' else GraphSage(
+#     training=False) if model_name == 'graph_sage' else GAT(
+#     training=False) if model_name == 'gat' else GIN(
+#     training=False) if model_name == 'gin' else None
 model_couple = GNN(model_name=model_name, training=False)
 model_couple.compile(optimizer=Adam(learning_rate=lr, epsilon=epsilon),
                      loss=loss_func,
@@ -721,7 +977,7 @@ model_couple.fit(loader.load(),
                  steps_per_epoch=1,
                  epochs=1)
 model_couple_save_path = os.path.join(
-    dir_params, f'couple_best_{save_name}.h5')
+    dir_params, f'{model_name}_couple_best_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.h5')
 if os.path.exists(model_couple_save_path):
     model_couple.load_weights(model_couple_save_path)
 else:
@@ -744,17 +1000,8 @@ gnn_plot(model_couple, batch_size,
          train_data_couple, yc_train,
          valid_data_couple, yc_valid,
          test_data_couple, yc_test, dir=dir_results,
-         name=f'couple_{save_name}')
-
-# runtime test
-couple_avg_time = test_runtime(model_couple, batch_size,
-                                test_data_couple, yc_test)
-# all time
-avg_time = total_avg_time + couple_avg_time
-print('all avg time:', avg_time)
+         name=f'{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}')
 
 # save results
 data_couple.to_csv(os.path.join(
-    dir_results, f"couple_{save_name}.csv"), index=False)
-
-
+    dir_results, f"{model_name}_couple_lr{lr}_batchsize{batch_size}_epochs{epochs}_ndm{ndm}_seed{seed}.csv"), index=False)
